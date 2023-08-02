@@ -277,13 +277,6 @@ async def join(ctx):
 
 
 @bot.command()
-async def leave(ctx):
-    if ctx.guild.voice_client:
-        await ctx.guild.voice_client.disconnect()
-        await ctx.send('Desconectado do canal de voz.')
-
-
-@bot.command()
 async def play(ctx, audio: str = None):
     if audio is None:
         audio_files = [file.rstrip('.mp3') for file in os.listdir('audios') if file.endswith('.mp3')]
@@ -557,6 +550,40 @@ async def reproduzir_url(ctx, url):
             filename = await YTDLSource.from_url(url, loop=bot.loop)
             ctx.guild.voice_client.play(discord.FFmpegPCMAudio(filename), after=lambda e: print('done', e))
 
+@bot.command()
+async def pause(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.pause()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
+
+
+@bot.command()
+async def resume(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_paused():
+        await voice_client.resume()
+    else:
+        await ctx.send("The bot was not playing anything before this. Use play_song command")
+
+
+@bot.command()
+async def leave(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_connected():
+        await voice_client.disconnect()
+    else:
+        await ctx.send("The bot is not connected to a voice channel.")
+
+
+@bot.command()
+async def stop(ctx):
+    voice_client = ctx.message.guild.voice_client
+    if voice_client.is_playing():
+        await voice_client.stop()
+    else:
+        await ctx.send("The bot is not playing anything at the moment.")
 
 @bot.command()
 async def info(ctx):
@@ -577,7 +604,6 @@ async def ajuda(ctx):
                 "`!gpt3 frase`: Completa a frase usando a IA da OpenAI.\n" \
                 "`!play`: Toca um áudio.\n" \
                 "`!join`: Entra no canal de voz.\n" \
-                "`!leave`: Sai do canal de voz.\n" \
                 "`!kick`: Kicka um membro aleatório do canal de voz.\n" \
                 "`!transfer @usuario quantidade`: Transfere moedas para outro membro.\n" \
                 "`!aposta quantidade`: Aposte moedas e ganhe mais moedas.\n" \
@@ -596,6 +622,10 @@ async def ajuda(ctx):
                 "`!abraco @usuario`: Dá um abraço em um usuário.\n" \
                 "`!elogio @usuario`: Elogia um usuário.\n" \
                 "`!reproduzir_url url`: Reproduz uma música a partir de uma URL.\n" \
+                "`!pause`: Pausa a reprodução de áudio.\n" \
+                "`!resume`: Continua a reprodução de áudio.\n" \
+                "`!stop`: Para a reprodução de áudio.\n" \
+                "`!leave`: Sai do canal de voz.\n" \
                 "`!ajuda`: Exibe esta mensagem de ajuda."
 
     await ctx.send(help_text)
