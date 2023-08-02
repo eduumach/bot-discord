@@ -1,29 +1,28 @@
 import asyncio
 import difflib
 import json
-import random
 import os
+import random
 import requests
-
-import openai
-import discord
 import urllib.parse
 
-import youtube_dl
+import discord
+import openai
+import yt_dlp as youtube_dl
 from discord.ext import commands
+from dotenv import load_dotenv
 from unidecode import unidecode
 
-from arquivos import jokes, EDUARDO_KESLER, EDUARDO_MACHADO, charadas, enigmas, elogios
+from arquivos import EDUARDO_MACHADO, EDUARDO_KESLER
+
+load_dotenv()
 
 TOKEN = os.environ['DISCORD_TOKEN']
 OPENAI_KEY = os.environ['OPENAI_KEY']
 XP_FILE = 'xp_data.json'
 COINS_FILE = 'coins_data.json'
-
 MAX_COINS = 9999
-
 initial_coins_gain_rate = 0.5
-
 coins_decrease_rate = 0.02
 
 openai.api_key = OPENAI_KEY
@@ -34,32 +33,57 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 levels = {}
 coins = {}
 
+youtube_dl.utils.bug_reports_message = lambda: ''
 
-def load_xp_data():
+ytdl_format_options = {
+    'format': 'bestaudio/best',
+    'restrictfilenames': True,
+    'noplaylist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0'  # bind to ipv4 since ipv6 addresses cause issues sometimes
+}
+
+ffmpeg_options = {
+    'options': '-vn'
+}
+
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+
+class YTDLSource(discord.PCMVolumeTransformer):
+    def __init__(self, source, *, data, volume=0.5):
+        super().__init__(source, volume)
+        self.data = data
+        self.title = data.get('title')
+        self.url = ""
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=False):
+        loop = loop or asyncio.get_event_loop()
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        if 'entries' in data:
+            # take first item from a playlist
+            data = data['entries'][0]
+        filename = data['title'] if stream else ytdl.prepare_filename(data)
+        return filename
+
+
+def load_data(file_name):
     try:
-        with open(XP_FILE, 'r') as file:
+        with open(file_name, 'r') as file:
             data = json.load(file)
             return data
     except FileNotFoundError:
         return {}
 
 
-def save_xp_data(data):
-    with open(XP_FILE, 'w') as file:
-        json.dump(data, file)
-
-
-def load_coins_data():
-    try:
-        with open(COINS_FILE, 'r') as file:
-            data = json.load(file)
-            return data
-    except FileNotFoundError:
-        return {}
-
-
-def save_coins_data(data):
-    with open(COINS_FILE, 'w') as file:
+def save_data(data, file_name):
+    with open(file_name, 'w') as file:
         json.dump(data, file)
 
 
@@ -100,15 +124,68 @@ def update_coins(user: discord.User, amount: int):
     else:
         coins[user_id] = MAX_COINS
 
-    save_coins_data(coins)
+    save_data(coins, COINS_FILE)
+
+
+def load_user_data():
+    global levels, coins
+    levels = load_data(XP_FILE)
+    coins = load_data(COINS_FILE)
+
+
+def save_user_data():
+    save_data(levels, XP_FILE)
+    save_data(coins, COINS_FILE)
+
+
+def openia_api(prompt):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user",
+                   "content": prompt}],
+    )
+    return response.choices[0].message.content
+
+
+async def handle_question(ctx, question_type):
+    question_types = {
+        "trivia": "pergunta",
+        "charada": "pergunta",
+        "riddle": "pergunta"
+    }
+
+    prompt = f'Cria uma pergunta de {question_type}, você me responde nesse formato: {{\n"pergunta": "string",\n"resposta": "string"\n}}'
+
+    question_data = json.loads(openia_api(prompt))
+    await ctx.send(f'{question_type.capitalize()}: {question_data[question_types[question_type]]}')
+
+    def verificar_resposta(m):
+        return m.author == ctx.author and m.channel == ctx.channel
+
+    try:
+        resposta = await bot.wait_for('message', check=verificar_resposta, timeout=30)
+
+        resposta_mensagem = unidecode(resposta.content).lower().strip()
+        resposta_certa = unidecode(question_data["resposta"]).lower().strip()
+
+        similaridade = difflib.SequenceMatcher(None, resposta_mensagem, resposta_certa).ratio()
+
+        limite_similaridade = 0.8
+
+        if similaridade >= limite_similaridade:
+            moedas = calculate_rates()
+            update_coins(ctx.author, moedas)
+            await ctx.send(f'Parabéns, você acertou a {question_type}! Você ganhou {moedas} coins!')
+        else:
+            await ctx.send(f'Infelizmente, você errou! A resposta correta era: {question_data["resposta"]}')
+    except asyncio.TimeoutError:
+        await ctx.send('Tempo esgotado! Você não respondeu a tempo.')
 
 
 @bot.event
 async def on_ready():
-    print('We have logged in as {0}'.format(bot.user))
-    global levels, coins
-    levels = load_xp_data()
-    coins = load_coins_data()
+    print('We have logged in as {0.user}'.format(bot))
+    load_user_data()
 
 
 @bot.event
@@ -134,15 +211,14 @@ async def on_message(message):
             await message.channel.send(
                 f"{message.author.mention} subiu para o nível {levels[user_id] // 10}!")
 
-        save_xp_data(levels)
-        save_coins_data(coins)
+        save_user_data()
 
     await bot.process_commands(message)
 
 
 @bot.command()
 async def joke(ctx):
-    await ctx.send(random.choice(jokes))
+    await ctx.send(openia_api('Cria uma piada'))
 
 
 @bot.command()
@@ -165,7 +241,7 @@ async def serverinfo(ctx):
 @bot.command()
 async def gay(ctx):
     porcentagem = random.randint(0, 100)
-    await ctx.channel.send(f'Voce eh {porcentagem}% gay!')
+    await ctx.channel.send(f'Você é {porcentagem}% gay!')
 
 
 @bot.command()
@@ -214,7 +290,8 @@ async def play(ctx, audio: str = None):
 
         audio_list = "\n".join(
             f"{index + 1}. {audio_name.capitalize()}" for index, audio_name in enumerate(audio_files))
-        embed = discord.Embed(title="Lista de Áudios Disponíveis", description=audio_list, color=discord.Color.blue())
+        embed = discord.Embed(title="Lista de Áudios Disponíveis", description=audio_list,
+                              color=discord.Color.blue())
 
         await ctx.channel.send(embed=embed)
         return
@@ -267,7 +344,7 @@ async def transfer(ctx, recipient: discord.Member, amount: float):
 
         coins[str(ctx.author.id)] -= amount
         coins[str(recipient.id)] = coins.get(str(recipient.id), 0) + amount
-        save_coins_data(coins)
+        save_data(coins, COINS_FILE)
         await ctx.send(f"{ctx.author.mention}, você transferiu {amount} moedas para {recipient.mention}!")
     else:
         await ctx.send(f"{ctx.author.mention}, você não tem moedas suficientes para transferir {amount} moedas!")
@@ -303,7 +380,7 @@ async def aposta(ctx, quantidade: float):
         coins[user_id] -= coins_perdidas
         await ctx.send(f"{ctx.author.mention}, você perdeu {coins_perdidas} moedas na aposta.")
 
-    save_coins_data(coins)
+    save_data(coins, COINS_FILE)
 
 
 @bot.command()
@@ -350,7 +427,7 @@ async def adivinhar_numero(ctx, aposta: float, numero: int):
     else:
         await ctx.send(f"Que pena! O número era {numero_aleatorio}. Você perdeu sua aposta de {aposta} moedas.")
 
-    save_coins_data(coins)
+    save_data(coins, COINS_FILE)
 
 
 @bot.command()
@@ -432,197 +509,53 @@ async def google(ctx, *, consulta):
 
 @bot.command()
 async def trivia(ctx):
-    prompt = ''' Cria uma pergunta de trivia, voce me reponder nesse formato: 
-    {
-    "pergunta": "string",
-    "resposta": "string"
-    }'''
-
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user",
-                   "content": prompt}],
-    )
-
-    trivia_question = json.loads(response.choices[0].message.content)
-
-    await ctx.send(trivia_question['pergunta'])
-
-    def check_answer(m):
-        return m.author == ctx.author and m.channel == ctx.channel
-
-    try:
-        # Aguarda a resposta do usuário com um limite de 20 segundos
-        user_answer = await bot.wait_for('message', check=check_answer, timeout=20.0)
-
-        # Verifica se a resposta do usuário está correta
-        if user_answer.content.lower() == trivia_question['resposta'].lower():
-            await ctx.send(f"Resposta correta, {ctx.author.mention}!")
-        else:
-            await ctx.send(
-                f"Resposta incorreta, {ctx.author.mention}. A resposta correta era: {trivia_question['resposta']}")
-    except asyncio.TimeoutError:
-        await ctx.send(
-            f"{ctx.author.mention}, o tempo para responder acabou. A resposta correta era: {trivia_question['resposta']}")
+    await handle_question(ctx, "trivia")
 
 
 @bot.command()
 async def charada(ctx):
-    prompt = ''' Cria uma pergunta de charada, voce me reponder nesse formato: 
-    {
-    "pergunta": "string",
-    "resposta": "string"
-    }'''
-
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user",
-                   "content": prompt}],
-    )
-
-    charada_escolhida = json.loads(response.choices[0].message.content)
-    print(charada_escolhida)
-    await ctx.send(f'Charada: {charada_escolhida["pergunta"]}')
-
-    def verificar_resposta(m):
-        return m.author == ctx.author and m.channel == ctx.channel
-
-    try:
-        resposta = await bot.wait_for('message', check=verificar_resposta, timeout=30)
-
-        resposta_mensagem = unidecode(resposta.content).lower().strip()
-        resposta_certa = unidecode(charada_escolhida["resposta"]).lower().strip()
-
-        similaridade = difflib.SequenceMatcher(None, resposta_mensagem, resposta_certa).ratio()
-
-        limite_similaridade = 0.8
-
-        if similaridade >= limite_similaridade:
-            moedas = calculate_rates()
-            update_coins(ctx.author, moedas)
-            await ctx.send(f'Parabéns, você acertou a charada! Você ganhou {moedas} coins!')
-
-        else:
-            await ctx.send(f'Infelizmente, você errou! A resposta correta era: {charada_escolhida["resposta"]}')
-    except asyncio.TimeoutError:
-        await ctx.send('Tempo esgotado! Você não respondeu a tempo.')
+    await handle_question(ctx, "charada")
 
 
 @bot.command()
 async def riddle(ctx):
-    prompt = ''' Cria uma pergunta de riddle, voce me reponder nesse formato: 
-    {
-    "pergunta": "string",
-    "resposta": "string"
-    }'''
-
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user",
-                   "content": prompt}],
-    )
-
-    enigma = json.loads(response.choices[0].message.content)
-    pergunta = enigma["pergunta"]
-    resposta = enigma["resposta"]
-
-    await ctx.send(f"**Enigma:**\n{pergunta}\n\nVocê tem 30 segundos para responder. Digite sua resposta!")
-
-    def check(resposta_usuario):
-        return resposta_usuario.author == ctx.author and resposta_usuario.channel == ctx.channel
-
-    try:
-        resposta_usuario = await bot.wait_for('message', timeout=30.0, check=check)
-    except asyncio.TimeoutError:
-        await ctx.send("Tempo esgotado! O enigma era: " + resposta)
-    else:
-        prompt = 'verifique se a reposta: ' + resposta_usuario + 'esta correta para essa pergunta: ' + enigma[
-            'pergunta']
-        + 'com a resposta: ' + enigma[
-            'resposta'] + 'se estiver correta coloque true se estiver errada coloque false voce me reponder nesse formato: ' + '''  
-    {
-    "certa": boolen
-    }'''
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user",
-                       "content": prompt}],
-        )
-
-        certo = json.loads(response)
-
-        if certo['certo']:
-            await ctx.send("Parabéns, você acertou!")
-        else:
-            await ctx.send(f"Resposta incorreta! O enigma era: {resposta}")
+    await handle_question(ctx, "riddle")
 
 
 @bot.command()
 async def cumprimentar(ctx, member: discord.Member):
-    # Verifica se o autor da mensagem é um usuário válido e não o próprio bot
     if ctx.author.bot:
         return
 
-    # Envia uma mensagem de cumprimento para o usuário mencionado
     await ctx.send(f'Olá, {member.mention}! Como você está?')
 
 
 @bot.command()
 async def abraco(ctx, member: discord.Member):
-    # Verifica se um usuário foi mencionado
     if not member:
         await ctx.send("Você precisa mencionar um usuário para dar um abraço!")
         return
 
-    # Obtém o caminho da pasta 'abracos' (certifique-se de que a pasta esteja na mesma pasta que o arquivo do bot)
     pasta_abracos = 'abracos'
-
-    # Obtém a lista de arquivos na pasta de abraços
     arquivos_abracos = os.listdir(pasta_abracos)
-
-    # Escolhe um arquivo aleatório da lista
     gif_abraco = random.choice(arquivos_abracos)
 
-    # Envia uma mensagem de abraço mencionando o remetente e o usuário que receberá o abraço
     await ctx.send(f"{ctx.author.mention} deu um abraço em {member.mention}! 🤗",
                    file=discord.File(os.path.join(pasta_abracos, gif_abraco)))
 
 
 @bot.command()
 async def elogio(ctx, user: discord.Member):
-    elogio = random.choice(elogios)
+    elogio = openia_api("Crie um elogio curto")
     await ctx.send(f"{user.mention}, {elogio}")
 
 
 @bot.command()
 async def reproduzir_url(ctx, url):
-    # Verifica se o autor do comando está em um canal de voz
-    if ctx.author.voice is None or ctx.author.voice.channel is None:
-        await ctx.send("Você precisa estar em um canal de voz para usar este comando.")
-        return
-
-    # Conecta-se ao canal de voz do autor do comando
-    voice_channel = ctx.author.voice.channel
-    voice_client = await voice_channel.connect()
-
-    # Extrai o áudio do YouTube usando youtube_dl
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-    }
-    try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            url2 = info['formats'][0]['url']
-            voice_client.play(discord.FFmpegPCMAudio(url2), after=lambda e: print('tocando'))
-        await ctx.send(f"Tocando música da URL: {url}")
-    except Exception as e:
-        await ctx.send("Ocorreu um erro ao reproduzir a música. Verifique a URL e tente novamente.")
-        print(e)
+    if ctx.guild.voice_client:
+        if ctx.author.voice and ctx.author.voice.channel:
+            filename = await YTDLSource.from_url(url, loop=bot.loop)
+            ctx.guild.voice_client.play(discord.FFmpegPCMAudio(filename), after=lambda e: print('done', e))
 
 
 @bot.command()
@@ -642,10 +575,10 @@ async def ajuda(ctx):
                 "`!level`: Mostra o seu nível baseado na quantidade de mensagens enviadas.\n" \
                 "`!joke`: Receba uma piada ou curiosidade aleatória.\n" \
                 "`!gpt3 frase`: Completa a frase usando a IA da OpenAI.\n" \
-                "`!play`: Toca um audio.\n" \
+                "`!play`: Toca um áudio.\n" \
                 "`!join`: Entra no canal de voz.\n" \
                 "`!leave`: Sai do canal de voz.\n" \
-                "`!kick`: Kicka um membro aleatorio do canal de voz.\n" \
+                "`!kick`: Kicka um membro aleatório do canal de voz.\n" \
                 "`!transfer @usuario quantidade`: Transfere moedas para outro membro.\n" \
                 "`!aposta quantidade`: Aposte moedas e ganhe mais moedas.\n" \
                 "`!ranking`: Exibe o ranking dos usuários mais ricos.\n" \
