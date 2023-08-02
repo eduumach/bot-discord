@@ -1,0 +1,8 @@
+.env
+audios/
+abracos/
+coins_data.json
+xp_data.json
+.idea
+__pycache__/
+
