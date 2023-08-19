@@ -14,6 +14,10 @@ from dotenv import load_dotenv
 from unidecode import unidecode
 
 from arquivos import EDUARDO_MACHADO, EDUARDO_KESLER
+from flask import Flask
+
+app = Flask(__name__)
+
 
 load_dotenv()
 
@@ -698,4 +702,10 @@ async def on_command_error(ctx, error):
         raise error
 
 
-bot.run(TOKEN)
+@app.route('/health', methods=['GET'])
+def health_check():
+    return 'OK'
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+    bot.run(TOKEN)
