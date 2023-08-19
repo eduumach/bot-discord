@@ -32,6 +32,17 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 levels = {}
 coins = {}
+queue = []
+
+AUTHORIZED_USERS = [EDUARDO_MACHADO]
+
+
+def has_permission():
+    def predicate(ctx):
+        return ctx.author.id in AUTHORIZED_USERS
+
+    return commands.check(predicate)
+
 
 youtube_dl.utils.bug_reports_message = lambda: ''
 
@@ -45,7 +56,7 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0'  # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0'
 }
 
 ffmpeg_options = {
@@ -202,16 +213,13 @@ async def on_message(message):
 
     xp_gain_rate = len(message.content) / 100
 
-    if random.random() < 0.7:
-        coins_gained = random.randint(1, 3) * calculate_rates()
-        levels[user_id] += xp_gain_rate
-        update_coins(message.author, coins_gained)
+    levels[user_id] += xp_gain_rate
 
-        if levels[user_id] % 10 == 0:
-            await message.channel.send(
-                f"{message.author.mention} subiu para o nível {levels[user_id] // 10}!")
+    if random.random() < 0.1:
+        update_coins(message.author, calculate_rates())
+        await message.channel.send(f'{message.author.mention}, você ganhou {calculate_rates()} coins!')
 
-        save_user_data()
+    save_user_data()
 
     await bot.process_commands(message)
 
@@ -277,7 +285,7 @@ async def join(ctx):
 
 
 @bot.command()
-async def play(ctx, audio: str = None):
+async def play_audio(ctx, audio: str = None):
     if audio is None:
         audio_files = [file.rstrip('.mp3') for file in os.listdir('audios') if file.endswith('.mp3')]
 
@@ -543,12 +551,58 @@ async def elogio(ctx, user: discord.Member):
     await ctx.send(f"{user.mention}, {elogio}")
 
 
+async def play_next(ctx):
+    if queue:
+        url = queue.pop(0)
+        filename = await YTDLSource.from_url(url, loop=bot.loop)  # Use asyncio.run to call the async function.
+        ctx.guild.voice_client.play(discord.FFmpegPCMAudio(filename))
+
+
+async def start_playback(ctx):
+    if not ctx.guild.voice_client:
+        channel = ctx.author.voice.channel
+        vc = await channel.connect()
+    await play_next(ctx)
+
+
 @bot.command()
-async def reproduzir_url(ctx, url):
+async def adicionar(ctx, url):
+    if ctx.author.voice and ctx.author.voice.channel:
+
+        queue.append(url)
+        await ctx.send(f'Added the song to the queue: {url}')
+    else:
+        await ctx.send("You must be in a voice channel to use this command!")
+
+
+@bot.command()
+async def play(ctx):
+    if ctx.author.voice and ctx.author.voice.channel:
+        if not ctx.guild.voice_client:
+            await start_playback(ctx)
+        else:
+            await ctx.send("The bot is already playing music.")
+    else:
+        await ctx.send("You must be in a voice channel to use this command!")
+
+
+@bot.command()
+async def pular(ctx):
+    if ctx.guild.voice_client and ctx.guild.voice_client.is_playing():
+        ctx.guild.voice_client.stop()
+        await play_next(ctx)
+    else:
+        await ctx.send("Nothing is currently playing!")
+
+
+@bot.command()
+async def parar(ctx):
     if ctx.guild.voice_client:
-        if ctx.author.voice and ctx.author.voice.channel:
-            filename = await YTDLSource.from_url(url, loop=bot.loop)
-            ctx.guild.voice_client.play(discord.FFmpegPCMAudio(filename), after=lambda e: print('done', e))
+        await ctx.guild.voice_client.disconnect()
+        queue.clear()
+    else:
+        await ctx.send("I am not connected to a voice channel!")
+
 
 @bot.command()
 async def pause(ctx):
@@ -578,12 +632,15 @@ async def leave(ctx):
 
 
 @bot.command()
-async def stop(ctx):
-    voice_client = ctx.message.guild.voice_client
-    if voice_client.is_playing():
-        await voice_client.stop()
-    else:
-        await ctx.send("The bot is not playing anything at the moment.")
+@has_permission()
+async def image(ctx, *, prompt: str = None):
+    response = openai.Image.create(
+        prompt=prompt,
+        n=1,
+        size="256x256",
+    )
+    await ctx.send(response["data"][0]["url"])
+
 
 @bot.command()
 async def info(ctx):
@@ -629,6 +686,16 @@ async def ajuda(ctx):
                 "`!ajuda`: Exibe esta mensagem de ajuda."
 
     await ctx.send(help_text)
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send(
+            "Você não tem permissão para usar este comando, mas se quiser ajudar a pagar, aceitamos doações em "
+            "cookies! 🍪\nbitcoin:bc1qr5nkd9d2wxwam8f3ulagajn00zp856vyrrywdt")
+    else:
+        raise error
 
 
 bot.run(TOKEN)

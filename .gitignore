@@ -6,3 +6,5 @@ xp_data.json
 .idea
 __pycache__/
 *.webm
+*.mp3
+venv
