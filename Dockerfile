@@ -8,6 +8,4 @@ COPY . app/
 
 WORKDIR app/
 
-EXPOSE 80/tcp  # Expose port 80
-
 CMD [ "python", "./main.py" ]
