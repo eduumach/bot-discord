@@ -1,25 +1,18 @@
-from gunicorn.app.base import BaseApplication
-from app import app
-from bot import bot
+from flask import Flask
+import threading
+import bot  # Importe o módulo do seu bot
 
-class StandaloneApplication(BaseApplication):
-    def __init__(self, app, bot, options=None):
-        self.options = options or {}
-        self.application = app
-        self.bot = bot
-        super().__init__()
+app = Flask(__name__)
 
-    def load_config(self):
-        config = {key: value for key, value in self.options.items() if key in self.cfg.settings and value is not None}
-        for key, value in config.items():
-            self.cfg.set(key.lower(), value)
+@app.route('/')
+def home():
+    return "Bem-vindo à minha aplicação web!"
 
-    def load(self):
-        return self.application
+def run_bot():
+    bot.run()
 
 if __name__ == '__main__':
-    options = {
-        'bind': '0.0.0.0:80',
-        'workers': 1
-    }
-    StandaloneApplication(app, bot, options).run()
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+
+    app.run()

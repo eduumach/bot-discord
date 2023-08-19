@@ -708,4 +708,5 @@ async def on_command_error(ctx, error):
         raise error
 
 
-bot.run(TOKEN)
+def run():
+    bot.run(TOKEN)
