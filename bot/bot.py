@@ -5,17 +5,16 @@ from discord.ext import commands
 class Bot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.load_extension('cogs.general')
-        self.load_extension('cogs.admin')
-        self.load_extension('cogs.bot')
-        self.load_extension('cogs.entertainment')
-        self.load_extension('cogs.error_handler')
-        self.load_extension('cogs.games')
-        self.load_extension('cogs.general')
-        self.load_extension('cogs.gpt')
-        self.load_extension('cogs.music')
-        self.load_extension('cogs.server')
-        self.load_extension('cogs.audio')
 
     async def on_ready(self):
+        await self.load_extension('bot.cogs.general')
+        await self.load_extension('bot.cogs.admin')
+        await self.load_extension('bot.cogs.bot')
+        await self.load_extension('bot.cogs.entertainment')
+        await self.load_extension('bot.cogs.error_handler')
+        await self.load_extension('bot.cogs.games')
+        await self.load_extension('bot.cogs.gpt')
+        await self.load_extension('bot.cogs.music')
+        await self.load_extension('bot.cogs.server')
+        await self.load_extension('bot.cogs.audio')
         print(f'We have logged in as {self.user}')

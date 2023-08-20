@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import urllib3
-from utils.openia import openia_api
+from bot.utils.openia import openia_api
 import random
 
 
@@ -75,5 +75,5 @@ class Entertainment(commands.Cog):
         await ctx.send(f'Aqui estão os resultados da pesquisa para "{consulta}": {url}')
 
 
-def setup(bot):
-    bot.add_cog(Entertainment(bot))
+async def setup(bot):
+    await bot.add_cog(Entertainment(bot))

@@ -21,5 +21,5 @@ class Bot(commands.Cog):
         await ctx.send(help_text)
 
 
-def setup(bot):
-    bot.add_cog(Bot(bot))
+async def setup(bot):
+    await bot.add_cog(Bot(bot))

@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from unidecode import unidecode
 import json
-from utils.openia import openia_api
+from bot.utils.openia import openia_api
 import asyncio
 import difflib
 
@@ -60,5 +60,5 @@ class Games(commands.Cog):
         await self.handle_question(ctx, "riddle")
 
 
-def setup(bot):
-    bot.add_cog(Games(bot))
+async def setup(bot):
+    await bot.add_cog(Games(bot))

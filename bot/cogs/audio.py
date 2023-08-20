@@ -57,5 +57,5 @@ class Audio(commands.Cog):
             await ctx.send(f"Arquivo MP3 '{attachment.filename}' recebido e salvo!")
 
 
-def setup(bot):
-    bot.add_cog(Audio(bot))
+async def setup(bot):
+    await bot.add_cog(Audio(bot))

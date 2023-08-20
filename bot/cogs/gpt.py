@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 from bot.utils.aut import has_permission
-from utils.openia import openia_api, openia_image
+from bot.utils.openia import openia_api, openia_image
 from bot.config import EDUARDO_MACHADO
 
 
@@ -28,5 +28,5 @@ class Gpt(commands.Cog):
         await ctx.send(openia_image(prompt))
 
 
-def setup(bot):
-    bot.add_cog(Gpt(bot))
+async def setup(bot):
+    await bot.add_cog(Gpt(bot))

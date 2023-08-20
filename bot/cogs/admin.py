@@ -51,5 +51,5 @@ class Admin(commands.Cog):
             await ctx.send('Você não tem permissão para usar este comando.')
 
 
-def setup(bot):
-    bot.add_cog(Admin(bot))
+async def setup(bot):
+    await bot.add_cog(Admin(bot))
