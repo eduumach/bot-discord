@@ -35,9 +35,16 @@ class Audio(commands.Cog):
 
         audio = audio.lower()
         audio_file = f'{AUDIO_PATH}/{audio}.mp3'
+        
+        def after_play(error):
+            if error:
+                print(f"Error playing {audio}: {error}")
+            else:
+                print(f"Finished playing {audio}")
+        
+            asyncio.run_coroutine_threadsafe(voice_client.disconnect(), self.bot.loop)
 
-        ctx.guild.voice_client.play(discord.FFmpegPCMAudio(audio_file), after=lambda e: print(
-            f'Finished playing: {e}') if e else None)
+        ctx.guild.voice_client.play(discord.FFmpegPCMAudio(audio_file), after=after_play)
 
 
     @commands.command()
