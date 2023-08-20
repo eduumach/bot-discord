@@ -1,6 +1,6 @@
 from flask import Flask
 import threading
-import bot  # Importe o módulo do seu bot
+import bot.main as bot  # Importe o módulo do seu bot
 
 app = Flask(__name__)
 
