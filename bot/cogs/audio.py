@@ -15,6 +15,8 @@ class Audio(commands.Cog):
             await self.show_available_audio(ctx)
         elif not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Você precisa estar em um canal de voz para usar esse comando.")
+        elif ctx.guild.voice_client:  # Verifica se o bot já está em um canal de voz
+            await self.play_audio(ctx, audio)
         else:
             await self.play_audio(ctx, audio)
 
@@ -30,6 +32,12 @@ class Audio(commands.Cog):
         await ctx.channel.send(embed=embed)
 
     async def play_audio(self, ctx, audio):
+        audio = audio.lower()
+        audio_file = f'{AUDIO_PATH}/{audio}.mp3'
+        
+        ctx.guild.voice_client.play(discord.FFmpegPCMAudio(audio_file), after=lambda e: print(f"Finished playing {audio}"))
+    
+    async def play_audio_join(self, ctx, audio):
         voice_channel = ctx.author.voice.channel
         voice_client = await voice_channel.connect()
 
