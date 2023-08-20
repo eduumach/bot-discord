@@ -1,5 +1,5 @@
 from discord.ext import commands
-from config import AUTHORIZED_USERS
+from bot.config import AUTHORIZED_USERS
 
 def has_permission():
     def predicate(ctx):

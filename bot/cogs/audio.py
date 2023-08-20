@@ -2,7 +2,7 @@ import asyncio
 import os
 import discord
 from discord.ext import commands
-from config import AUDIO_PATH
+from bot.config import AUDIO_PATH
 
 
 class Audio(commands.Cog):

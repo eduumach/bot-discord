@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 from bot.utils.aut import has_permission
 from utils.openia import openia_api, openia_image
-from config import EDUARDO_MACHADO
+from bot.config import EDUARDO_MACHADO
 
 
 class Gpt(commands.Cog):
