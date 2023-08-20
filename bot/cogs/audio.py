@@ -15,7 +15,8 @@ class Audio(commands.Cog):
             await self.show_available_audio(ctx)
         elif not ctx.author.voice or not ctx.author.voice.channel:
             await ctx.send("Você precisa estar em um canal de voz para usar esse comando.")
-        elif ctx.guild.voice_client:
+        else:
+            print('aaa')
             await self.play_audio(ctx, audio)
 
     async def show_available_audio(self, ctx):
@@ -36,13 +37,8 @@ class Audio(commands.Cog):
         audio = audio.lower()
         audio_file = f'{AUDIO_PATH}/{audio}.mp3'
 
-        voice_client.play(discord.FFmpegPCMAudio(audio_file),
-                          after=lambda e: print('done', e))
+        ctx.guild.voice_client.play(discord.FFmpegPCMAudio(audio_file), after=lambda e: await voice_channel.disconnect())
 
-        while voice_client.is_playing():
-            await asyncio.sleep(1)
-
-        await voice_client.disconnect()
 
     @commands.command()
     async def adiciona_audio(self, ctx):
@@ -52,6 +48,8 @@ class Audio(commands.Cog):
 
     async def save_audio(self, ctx, attachment):
         if attachment.filename.endswith('.mp3'):
+            if not os.path.exists(AUDIO_PATH):
+                os.makedirs(AUDIO_PATH)
             save_path = os.path.join(AUDIO_PATH, attachment.filename)
             await attachment.save(save_path)
             await ctx.send(f"Arquivo MP3 '{attachment.filename}' recebido e salvo!")
