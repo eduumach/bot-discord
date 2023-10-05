@@ -1,5 +1,6 @@
 from requests import get
 from discord.ext import commands
+import subprocess
 import os
 
 
@@ -10,8 +11,11 @@ class Mine(commands.Cog):
     @commands.command()
     async def mine_start(self, ctx):
         await ctx.send('Iniciando o servidor...')
-        os.chdir('~/mine')
-        os.system("screen -dm -S minecraft ~/mine/run.sh")
+        caminho_da_pasta = '/home/edu/mine'
+        comando = 'screen -dm -S minecraft ~/mine/run.sh'
+
+        os.chdir(caminho_da_pasta)
+        subprocess.run(comando, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
     
     @commands.command()
