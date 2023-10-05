@@ -25,6 +25,8 @@ class Mine(commands.Cog):
         os.system("screen -S minecraft -X quit")
     
     
-    async def setup(bot):
-        bot.add_cog(Mine(bot))
+    
+async def setup(bot):
+    await bot.add_cog(Mine(bot))
+
     
