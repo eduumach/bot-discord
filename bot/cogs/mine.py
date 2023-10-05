@@ -24,3 +24,7 @@ class Mine(commands.Cog):
         await ctx.send('Parando o servidor...')
         os.system("screen -S minecraft -X quit")
     
+    
+    async def setup(bot):
+        bot.add_cog(Mine(bot))
+    
