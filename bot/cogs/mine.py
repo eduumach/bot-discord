@@ -10,6 +10,7 @@ class Mine(commands.Cog):
     @commands.command()
     async def mine_start(self, ctx):
         await ctx.send('Iniciando o servidor...')
+        os.chdir('~/mine')
         os.system("screen -dm -S minecraft ~/mine/run.sh")
         
     
