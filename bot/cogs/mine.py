@@ -1,5 +1,6 @@
 from requests import get
 from discord.ext import commands
+import discord
 import subprocess
 import os
 
