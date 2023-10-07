@@ -12,7 +12,7 @@ class Mine(commands.Cog):
     @commands.command()
     async def mine_mods_start(self, ctx):
         await ctx.send('Iniciando o servidor mods...')
-        caminho_da_pasta = '/home/edu/mine'
+        caminho_da_pasta = '/home/edu/mines'
         comando = 'screen -dm -S minecraft ~/mines/mods/run.sh'
 
         os.system("screen -S minecraft -X quit")
@@ -23,7 +23,7 @@ class Mine(commands.Cog):
     @commands.command()
     async def mine_atm_start(self, ctx):
         await ctx.send('Iniciando o servidor ATM...')
-        caminho_da_pasta = '/home/edu/mine'
+        caminho_da_pasta = '/home/edu/mines'
         comando = 'screen -dm -S minecraft ~/mines/atm/startserver.sh'
 
         os.system("screen -S minecraft -X quit")
