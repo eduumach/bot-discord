@@ -18,4 +18,6 @@ class Bot(commands.Bot):
         await self.load_extension('bot.cogs.server')
         await self.load_extension('bot.cogs.audio')
         await self.load_extension('bot.cogs.mine')
+        await self.load_extension('bot.cogs.cat')
+        await self.load_extension('bot.cogs.rpg')
         print(f'We have logged in as {self.user}')

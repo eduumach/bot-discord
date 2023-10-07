@@ -1,109 +1,72 @@
 import discord
 from discord.ext import commands
-import asyncio
-import yt_dlp as youtube_dl
-
-ytdl_format_options = {
-    'format': 'bestaudio/best',
-    'restrictfilenames': True,
-    'noplaylist': True,
-    'nocheckcertificate': True,
-    'ignoreerrors': False,
-    'logtostderr': False,
-    'quiet': True,
-    'no_warnings': True,
-    'default_search': 'auto',
-    'source_address': '0.0.0.0'
-}
-
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+import youtube_dl
 
 
 class Music(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.queue = {}
+        self.voice = None
+        self.queue = []
+        self.play_next = self.bot.loop.create_task(self.play_music())
+
+    def get_voice(self, ctx):
+        if self.voice is None:
+            self.voice = ctx.author.voice.channel.connect()
+        elif self.voice.channel != ctx.author.voice.channel:
+            raise commands.CommandError('Você precisa estar no mesmo canal de voz que o bot.')
+        return self.voice
+
+    async def play_music(self):
+        while True:
+            if self.queue:
+                url = self.queue.pop(0)
+                voice = self.voice or await self.queue[0].channel.connect()
+                with youtube_dl.YoutubeDL({'format': 'bestaudio'}) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    voice.play(discord.FFmpegPCMAudio(info['url']))
+                    await self.bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=info['title']))
+                    while voice.is_playing():
+                        await asyncio.sleep(1)
+            else:
+                await asyncio.sleep(1)
 
     @commands.command()
     async def join(self, ctx):
-        if ctx.author.voice and ctx.author.voice.channel:
-            voice_channel = ctx.author.voice.channel
-            voice_client = await voice_channel.connect()
-            await ctx.send(f'Conectado ao canal de voz: {voice_channel}')
+        self.voice = await self.get_voice(ctx)
+        await ctx.send(f'Conectado ao canal de voz {self.voice.channel.name}.')
 
     @commands.command()
-    async def adicionar(self, ctx, url):
-        if ctx.author.voice and ctx.author.voice.channel:
-            if ctx.guild.id not in self.queue:
-                self.queue[ctx.guild.id] = []
-
-            self.queue[ctx.guild.id].append(url)
-            await ctx.send(f'Added the song to the queue: {url}')
+    async def leave(self, ctx):
+        if self.voice is not None:
+            await self.voice.disconnect()
+            self.voice = None
+            self.queue = []
+            await self.bot.change_presence(activity=None)
+            await ctx.send('Desconectado do canal de voz.')
         else:
-            await ctx.send("You must be in a voice channel to use this command!")
+            await ctx.send('Não estou conectado a nenhum canal de voz.')
 
     @commands.command()
-    async def play(self, ctx):
-        if ctx.author.voice and ctx.author.voice.channel:
-            if not ctx.guild.voice_client:
-                await self.start_playback(ctx)
-            else:
-                await ctx.send("The bot is already playing music.")
-        else:
-            await ctx.send("You must be in a voice channel to use this command!")
+    async def play(self, ctx, url):
+        self.queue.append(await self.bot.fetch_channel(ctx.channel.id).fetch_message(ctx.message.id))
+        await ctx.send(f'Adicionado à fila: {url}')
 
     @commands.command()
-    async def pular(self, ctx):
-        if ctx.guild.voice_client and ctx.guild.voice_client.is_playing():
-            ctx.guild.voice_client.stop()
-            await self.play_next(ctx)
+    async def skip(self, ctx):
+        if self.voice is not None and self.voice.is_playing():
+            self.voice.stop()
+            await ctx.send('Música pulada.')
         else:
-            await ctx.send("Nothing is currently playing!")
+            await ctx.send('Não estou tocando nada no momento.')
 
     @commands.command()
-    async def parar(self, ctx):
-        if ctx.guild.voice_client:
-            await ctx.guild.voice_client.disconnect()
-            self.queue[ctx.guild.id] = []
+    async def queue(self, ctx):
+        if self.queue:
+            queue_list = '\n'.join([f'{i+1}. {msg.content}' for i, msg in enumerate(self.queue)])
+            await ctx.send(f'Fila de reprodução:\n{queue_list}')
         else:
-            await ctx.send("I am not connected to a voice channel!")
-
-    @commands.command()
-    async def pause(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_playing():
-            await voice_client.pause()
-        else:
-            await ctx.send("The bot is not playing anything at the moment.")
-
-    @commands.command()
-    async def resume(self, ctx):
-        voice_client = ctx.message.guild.voice_client
-        if voice_client.is_paused():
-            await voice_client.resume()
-        else:
-            await ctx.send("The bot was not playing anything before this. Use play command")
-
-    async def play_next(self, ctx):
-        if ctx.guild.id in self.queue and self.queue[ctx.guild.id]:
-            url = self.queue[ctx.guild.id].pop(0)
-            filename = await self.get_filename(url, loop=self.bot.loop)
-            ctx.guild.voice_client.play(discord.FFmpegPCMAudio(
-                filename), after=lambda e: self.bot.loop.create_task(self.play_next(ctx)))
-
-    async def start_playback(self, ctx):
-        if not ctx.guild.voice_client:
-            channel = ctx.author.voice.channel
-            await channel.connect()
-
-        await self.play_next(ctx)
-
-    async def get_filename(self, url, *, loop=None, stream=False):
-        loop = loop or asyncio.get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-        if 'entries' in data:
-            data = data['entries'][0]
-        return data['url']
+            await ctx.send('A fila de reprodução está vazia.')
 
 
 async def setup(bot):

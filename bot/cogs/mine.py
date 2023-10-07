@@ -22,7 +22,7 @@ class Mine(commands.Cog):
 
     @commands.command()
     async def mine_atm_start(self, ctx):
-        await ctx.send('Iniciando o servidor ATM...')
+        await ctx.send('Iniciando o servidor ATM...\nIsso pode demorar ate 10 minutos.\nQue tal jogar um trivia enquanto isso?\n!trivia')
         caminho_da_pasta = '/home/edu/mines'
         comando = 'screen -dm -S minecraft ~/mines/atm/startserver.sh'
 
